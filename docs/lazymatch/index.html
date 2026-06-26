@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LazyMatch — A Cozy Match-3 Puzzler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    /* =====================================================================
+       Canonical design tokens — verbatim from docs/design-system/tokens/tokens.css
+       "Enamel Pin": warm, tactile, matte. NOT glossy/candy.
+       ===================================================================== */
+    :root {
+      --color-board: #F5ECD9;
+      --color-surface: #FBF5E8;
+      --color-surface-sunken: #ECE1CB;
+      --color-ink: #3A2E2A;
+      --color-ink-soft: #7A6A60;
+      --color-ink-faint: #B6A998;
+      --color-line: #E2D5BC;
+      --tile-1-fill: #C75D4F; --tile-1-border: #9C3F34;
+      --tile-2-fill: #E0A52E; --tile-2-border: #B17F1A;
+      --tile-3-fill: #88A271; --tile-3-border: #61784C;
+      --tile-4-fill: #2E9B8E; --tile-4-border: #1D716A;
+      --tile-5-fill: #834E73; --tile-5-border: #5E3552;
+      --tile-6-fill: #DD8A9B; --tile-6-border: #B85C71;
+      --tile-inset: #FFF8EC;
+      --tile-inset-shadow: rgba(58, 46, 42, 0.18);
+      --color-accent: #C75D4F;
+      --color-accent-border: #9C3F34;
+      --color-positive: #5C8A5C;
+      --color-locked: #B6A998;
+      --color-star-filled: #E0A52E;
+      --radius-sm: 8px; --radius-md: 14px; --radius-lg: 22px; --radius-pill: 999px;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+      --font-display: "Nunito", "Quicksand", system-ui, -apple-system, sans-serif;
+      --font-body: "Nunito", "Quicksand", system-ui, -apple-system, sans-serif;
+      --text-xs: 12px; --text-sm: 14px; --text-md: 16px; --text-lg: 20px; --text-xl: 28px; --text-xxl: 40px;
+      --weight-regular: 500; --weight-bold: 700; --weight-extrabold: 800;
+      --shadow-tile: 0 3px 0 rgba(58,46,42,0.12), 0 6px 10px rgba(58,46,42,0.18);
+      --shadow-panel: 0 4px 14px rgba(58,46,42,0.10), 0 1px 0 rgba(58,46,42,0.04);
+      --shadow-raised: 0 6px 18px rgba(58,46,42,0.16);
+      --shadow-button: 0 4px 0 rgba(58,46,42,0.18);
+      --border-tile-width: 4px; --border-panel-width: 2px;
+    }
+
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      font-weight: var(--weight-regular);
+      background-color: var(--color-board);
+      color: var(--color-ink);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Layout wrapper ───────────────────────────────────────────── */
+    .page-wrap {
+      width: 100%;
+      max-width: 760px;
+      padding: 0 var(--space-5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+    }
+
+    /* ── Tile mosaic (decorative) ─────────────────────────────────── */
+    .tile-row {
+      display: flex;
+      gap: var(--space-3);
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: var(--space-7);
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .tile {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      border: var(--border-tile-width) solid transparent;
+      box-shadow: var(--shadow-tile);
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* Matte inner sheen — inset shape backdrop shared by every tile */
+    .tile::after {
+      content: '';
+      position: absolute;
+      inset: 18%;
+      border-radius: var(--radius-sm);
+      background: var(--tile-inset);
+      opacity: 0.55;
+    }
+
+    .tile-1 { background: var(--tile-1-fill); border-color: var(--tile-1-border); }
+    .tile-2 { background: var(--tile-2-fill); border-color: var(--tile-2-border); }
+    .tile-3 { background: var(--tile-3-fill); border-color: var(--tile-3-border); }
+    .tile-4 { background: var(--tile-4-fill); border-color: var(--tile-4-border); }
+    .tile-5 { background: var(--tile-5-fill); border-color: var(--tile-5-border); }
+    .tile-6 { background: var(--tile-6-fill); border-color: var(--tile-6-border); }
+
+    /* ── Wordmark ─────────────────────────────────────────────────── */
+    .wordmark {
+      margin-top: var(--space-6);
+      font-family: var(--font-display);
+      font-size: clamp(var(--text-xxl), 9vw, 64px);
+      font-weight: var(--weight-extrabold);
+      letter-spacing: -0.5px;
+      line-height: 1;
+      text-align: center;
+      color: var(--color-ink);
+    }
+
+    .wordmark span {
+      color: var(--color-accent);
+    }
+
+    /* ── Tagline ──────────────────────────────────────────────────── */
+    .tagline {
+      margin-top: var(--space-3);
+      font-size: clamp(var(--text-md), 3.5vw, var(--text-lg));
+      font-weight: var(--weight-bold);
+      color: var(--color-ink-soft);
+      text-align: center;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* ── Hero card ────────────────────────────────────────────────── */
+    .hero-card {
+      margin-top: var(--space-6);
+      width: 100%;
+      background: var(--color-surface);
+      border: var(--border-panel-width) solid var(--color-line);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6) var(--space-7);
+      box-shadow: var(--shadow-panel);
+    }
+
+    .hero-card p {
+      font-size: clamp(var(--text-sm), 3vw, var(--text-md));
+      font-weight: var(--weight-regular);
+      color: var(--color-ink-soft);
+      line-height: 1.7;
+      text-align: center;
+    }
+
+    .hero-card p + p {
+      margin-top: var(--space-3);
+    }
+
+    /* ── CTA chip ─────────────────────────────────────────────────── */
+    .cta-wrap {
+      margin-top: var(--space-7);
+      display: flex;
+      justify-content: center;
+    }
+
+    .cta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      background: var(--color-surface);
+      border: var(--border-panel-width) solid var(--color-line);
+      border-radius: var(--radius-pill);
+      padding: var(--space-3) var(--space-5);
+      box-shadow: var(--shadow-button);
+      cursor: default;
+    }
+
+    .cta-badge-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--color-surface-sunken);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-lg);
+      line-height: 1;
+      flex-shrink: 0;
+      color: var(--color-ink-soft);
+    }
+
+    .cta-badge-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .cta-badge-sub {
+      font-size: var(--text-xs);
+      font-weight: var(--weight-bold);
+      color: var(--color-ink-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .cta-badge-main {
+      font-size: clamp(var(--text-sm), 2.8vw, var(--text-md));
+      font-weight: var(--weight-extrabold);
+      color: var(--color-ink-soft);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .coming-pill {
+      display: inline-block;
+      background: var(--color-accent);
+      border: var(--border-panel-width) solid var(--color-accent-border);
+      color: var(--color-surface);
+      font-size: 10px;
+      font-weight: var(--weight-extrabold);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-pill);
+      margin-left: var(--space-2);
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+
+    /* ── Divider ──────────────────────────────────────────────────── */
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: var(--color-line);
+      margin-top: var(--space-7);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer {
+      width: 100%;
+      max-width: 760px;
+      padding: var(--space-5) var(--space-5) var(--space-6);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2) var(--space-5);
+      font-size: var(--text-sm);
+      color: var(--color-ink-faint);
+      font-weight: var(--weight-bold);
+      text-align: center;
+    }
+
+    footer a {
+      color: var(--color-ink-soft);
+      text-decoration: none;
+      border-bottom: 1px solid var(--color-line);
+      padding-bottom: 1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    footer a:hover {
+      color: var(--color-accent);
+      border-bottom-color: var(--color-accent);
+    }
+
+    footer .sep {
+      color: var(--color-line);
+      font-weight: var(--weight-regular);
+    }
+
+    /* ── Responsive tweaks ────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .hero-card {
+        padding: var(--space-6) var(--space-5);
+      }
+
+      .tile {
+        width: 38px;
+        height: 38px;
+      }
+
+      .tile-row {
+        gap: var(--space-2);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-wrap">
+
+    <!-- Decorative tile mosaic (full 6-colour Enamel Pin palette) -->
+    <div class="tile-row" aria-hidden="true">
+      <div class="tile tile-2"></div>
+      <div class="tile tile-4"></div>
+      <div class="tile tile-6"></div>
+      <div class="tile tile-3"></div>
+      <div class="tile tile-1"></div>
+      <div class="tile tile-5"></div>
+      <div class="tile tile-2"></div>
+    </div>
+
+    <!-- Wordmark -->
+    <h1 class="wordmark">Lazy<span>Match</span></h1>
+    <p class="tagline">A cozy match-3 puzzler.</p>
+
+    <!-- Hero description -->
+    <div class="hero-card">
+      <p>
+        Swap and match colourful tiles, chain satisfying cascades, and clear
+        puzzles at your own pace. No timers, no pressure — just a relaxing loop
+        you can pick up and put down whenever you like.
+      </p>
+      <p>
+        LazyMatch is a portrait puzzle game for Android, built around a
+        hand-crafted set of levels with a clean, enamel-pin aesthetic and zero
+        fluff. Pure match-3 joy, nothing else.
+      </p>
+    </div>
+
+    <!-- Coming-soon CTA -->
+    <div class="cta-wrap">
+      <div class="cta-badge" role="img" aria-label="Coming soon to Google Play">
+        <div class="cta-badge-icon">&#9654;</div>
+        <div class="cta-badge-text">
+          <span class="cta-badge-sub">Get it on</span>
+          <span class="cta-badge-main">
+            Google Play
+            <span class="coming-pill">Coming soon</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+  </div><!-- /page-wrap -->
+
+  <footer>
+    <a href="privacy.html">Privacy Policy</a>
+    <span class="sep">·</span>
+    <a href="mailto:lazydevsinc@gmail.com">lazydevsinc@gmail.com</a>
+    <span class="sep">·</span>
+    <span>&#169; 2026 TheLazyDevs Inc.</span>
+  </footer>
+
+</body>
+</html>
